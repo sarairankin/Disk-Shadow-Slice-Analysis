@@ -1,11 +1,13 @@
-# Full Pipeline - OFFICIAL
+# Full Pipeline - 2026-11-17
 # File Management Imports
 import os
 
 # Figure Imports
 from astropy.nddata.utils import Cutout2D
 from astropy.io import fits
+from astropy.visualization import simple_norm
 import matplotlib.pylab as plt
+import matplotlib.patches as patches
 plt.style.use('ggplot')
 plt.rcParams['font.family'] = 'serif'
 plt.rcParams['font.serif'] = ['Times New Roman'] + plt.rcParams['font.serif']
@@ -363,37 +365,43 @@ class ShadowSlicer():
         image_data = fits.getdata(self.image_file, 0)
         
         # Full Cutout
-        fig = plt.figure(figsize=(10, 5))
+        fig, ax = plt.subplots(figsize=(10, 5))
         image_selection = Cutout2D(image_data, self.loc, (self.ys, self.xs), mode='partial')
         normalized_selection = image_selection.data/np.nanmean(image_selection.data)
-        plt.scatter(self.xs/2, self.ys/2, marker='*', lw=2, color = 'orange')
-        plt.imshow(normalized_selection, cmap="gray", origin='lower', vmin=0, vmax=3)
+        ax.scatter(self.xs/2, self.ys/2, marker='*', s=20, color = 'orange')
+        norm = simple_norm(normalized_selection, stretch='asinh', asinh_a=0.1, percent=95.5)
+        ax.imshow(normalized_selection, cmap="gray", norm=norm, origin='lower')
         for i in np.arange(len(self.ris)):
             # Western Slice Markers
             ri = self.ris[i]
             Data = ShadowData(ri=ri,image_file=self.image_file, loc=self.loc, 
                                             upper_h_r = self.upper_bound_west[str(self.light_days[i])], lower_h_r = self.lower_bound_west[str(self.light_days[i])],
                                             xs=self.xs, ys=self.ys)
-            plt.scatter(self.xs/2 + ri, self.ys/2 + Data.bounds[1]*ri, marker='v', lw=1, color = 'orange', zorder=3)
-            plt.scatter(self.xs/2 + ri, self.ys/2 + Data.bounds[0]*ri, marker='^', lw=1, color = 'orange', zorder=3)
-            plt.vlines(self.xs/2 + ri,                 # Data Extraction Range
-                       self.ys/2 + self.lower_bound_west[str(self.light_days[i])]*ri,
-                       self.ys/2 + self.upper_bound_west[str(self.light_days[i])]*ri, 
-                       ls = '--', lw=2, color='magenta')
-
+            ax.scatter(self.xs/2 + ri, self.ys/2 + Data.bounds[1]*ri, marker='v', s=18, color = 'orange', zorder=3)
+            ax.scatter(self.xs/2 + ri, self.ys/2 + Data.bounds[0]*ri, marker='^', s=18, color = 'orange', zorder=3)
+            y_max_bound = self.ys/2 + self.upper_bound_west[str(self.light_days[i])]*ri
+            y_min_bound = self.ys/2 + self.lower_bound_west[str(self.light_days[i])]*ri
+            rect = patches.Rectangle(
+                        (self.xs/2 + ri - self.boxwidth/2, y_min_bound),
+                        width=self.boxwidth, height= y_max_bound - y_min_bound,
+                        facecolor='none', edgecolor='mediumturquoise',
+                        alpha=0.75, linestyle='-', linewidth=0.5)
+            ax.add_patch(rect)
+            
             # Eastern Markers
             Data = ShadowData(ri=-ri,image_file=self.image_file, loc=self.loc, 
                                                         upper_h_r = self.upper_bound_east[str(self.light_days[i])], lower_h_r = self.lower_bound_east[str(self.light_days[i])],
                                                         xs=self.xs, ys=self.ys)
-            plt.scatter(self.xs/2 - ri, self.ys/2 + Data.bounds[1]*ri, marker='v', lw=1, color = 'orange', zorder=3)
-            plt.scatter(self.xs/2 - ri, self.ys/2 + Data.bounds[0]*ri, marker='^', lw=1, color = 'orange', zorder=3)
-            plt.vlines(self.xs/2 - ri, 
-                       self.ys/2 + self.lower_bound_east[str(self.light_days[i])]*ri,
-                       self.ys/2 + self.upper_bound_east[str(self.light_days[i])]*ri, 
-                       ls = '--', lw=2, color='magenta') 
+            ax.scatter(self.xs/2 - ri, self.ys/2 + Data.bounds[1]*ri, marker='v', s=18, color = 'orange', zorder=3)
+            ax.scatter(self.xs/2 - ri, self.ys/2 + Data.bounds[0]*ri, marker='^', s=18, color = 'orange', zorder=3)
+            rect = patches.Rectangle(
+                        (self.xs/2 - ri - self.boxwidth/2, y_min_bound),
+                        width=self.boxwidth, height= y_max_bound - y_min_bound,
+                        facecolor='none', edgecolor='mediumturquoise',
+                        alpha=0.75, linestyle='-', linewidth=0.5)
+            ax.add_patch(rect) 
         plt.grid(False)
-        plt.xticks([])
-        plt.yticks([])
+        ax.tick_params(axis="both", which="both", bottom=False, top=False, left=False, right=False, labelbottom=False, labelleft=False)
         plt.title(self.target_name + ', ' + self.filter_name)
         fig.savefig(self.save_path + self.filter_name + '_selection.pdf', bbox_inches='tight')
         
@@ -410,27 +418,31 @@ class ShadowSlicer():
                 fig = plt.figure(figsize=(7, 5))
                 ax1 = fig.add_subplot(121) # row col pos
                 ax1.imshow(normalized_selection[:, int(self.xs/2+ri-self.boxwidth/2) : int(self.xs/2+ri+self.boxwidth/2)],
-                        origin='lower', cmap="gray", vmin=0, vmax=2)  
-                ax1.scatter(self.boxwidth/2, self.ys/2 + Data.bounds[1]*ri, marker='v', lw=2, color = 'orange', zorder=3, label='Detected Edge')
-                ax1.scatter(self.boxwidth/2, self.ys/2 + Data.bounds[0]*ri, marker='^', lw=2, color = 'orange', zorder=3)
+                        origin='lower', cmap="gray", norm=norm)
+                ax1.scatter(self.boxwidth/2, self.ys/2 + Data.bounds[1]*ri, marker='v', 
+                            s=30, color= 'orange', ec='black', zorder=3, label='Detected Edge')
+                ax1.scatter(self.boxwidth/2, self.ys/2 + Data.bounds[0]*ri, marker='^', 
+                            s=30, color= 'orange', ec='black', zorder=3)
                 ax1.scatter(self.boxwidth/2, self.ys/2 + self.upper_bound_west[str(self.light_days[i])]*ri, marker='v',
-                            lw=1, color = 'magenta', zorder=3, label='Data Edge')
+                            s=35, color= 'mediumturquoise', ec='black', zorder=3, label='Data Edge')
                 ax1.scatter(self.boxwidth/2, self.ys/2 + self.lower_bound_west[str(self.light_days[i])]*ri, marker='^',
-                            lw=1, color = 'magenta', zorder=3)
-                ax1.set_ylabel('Slice @ ' + str(np.round(self.light_days[i], 1)) + str(' Light Travel Days'))   
+                            s=35, color= 'mediumturquoise', ec='black', zorder=3)
+                ax1.set_ylabel('Slice at ' + str(np.round(self.light_days[i], 1)) + str(' Light Travel Days'))   
                 ax1.grid(False)
-                ax1.set_xlabel('pixel')
-                ax1.legend(bbox_to_anchor=(3.5, 1), fontsize=6)
+                ax1.tick_params(axis="both", which="both", bottom=False, top=False, left=False, right=False, labelbottom=False, labelleft=False)
+                ax1.legend(loc='center', bbox_to_anchor=(0.5, -0.07), fontsize=9)
             # Slice Data 2D
                 ax2 = fig.add_subplot(122) # row col pos
-                ax2.plot(Data.full_slice, Data.full_h_r, color='black', ls='--', label='Full Slice')
-                ax2.plot(Data.slice, Data.h_r, color='magenta', marker = '.', ls='--', label='Truncated Shadow')
-                ax2.scatter(Data.full_slice[Data.bounds_slice[1]], Data.bounds[1], marker='v', lw=2, color = 'orange', zorder=3)
-                ax2.scatter(Data.full_slice[Data.bounds_slice[0]], Data.bounds[0], marker='^', lw=2, color = 'orange', zorder=3)                          
+                ax2.plot(Data.full_slice, Data.full_h_r, color='black', ls='--', lw=1, label='Full Slice')
+                ax2.plot(Data.slice, Data.h_r, color='mediumturquoise', marker = '.', label='Truncated Shadow')
+                ax2.scatter(Data.full_slice[Data.bounds_slice[1]], Data.bounds[1], marker='<',
+                            s=30, color = 'orange', ec='black', zorder=3)
+                ax2.scatter(Data.full_slice[Data.bounds_slice[0]], Data.bounds[0], marker='<', 
+                            s=30, color = 'orange', ec='black', zorder=3)                          
                 ax2.set_title('Slice Data')
                 ax2.set_ylabel('Scale Height H/R')
                 ax2.set_xlabel('Intensity')
-                ax2.legend()
+                ax2.legend(loc='upper right', fontsize=9)
                 fig.savefig(self.save_path + 'slice_selections/slice_' + str(int(self.light_days[i])) + '.pdf', bbox_inches='tight')
             # Eastern Slices
             if self.easternlobe == True:
@@ -443,29 +455,30 @@ class ShadowSlicer():
                 fig = plt.figure(figsize=(7, 5))
                 ax1 = fig.add_subplot(121) # row col pos
                 ax1.imshow(normalized_selection[:, int(self.xs/2+ri-self.boxwidth/2) : int(self.xs/2+ri+self.boxwidth/2)],
-                        origin='lower', cmap="gray", vmin=0, vmax=2)  
+                        origin='lower', cmap="gray",norm=norm)
                 ax1.scatter(self.boxwidth/2, self.ys/2 - Data.bounds[1]*ri, marker='v',
-                            lw=2, color = 'orange', zorder=3, label='Detected Edge')
+                            s=30, color='orange', ec='black', zorder=3, label='Detected Edge')
                 ax1.scatter(self.boxwidth/2, self.ys/2 - Data.bounds[0]*ri, marker='^',
-                            lw=2, color = 'orange', zorder=3)
-                ax1.scatter(self.boxwidth/2, self.ys/2 - self.upper_bound_east[str(self.light_days[i])]*ri, marker='v',
-                            lw=1, color = 'magenta', zorder=3, label='Data Edge')
-                ax1.scatter(self.boxwidth/2, self.ys/2 - self.lower_bound_east[str(self.light_days[i])]*ri, marker='^',
-                            lw=1, color = 'magenta', zorder=3)
-                ax1.set_ylabel('Slice @ ' + str(-np.round(self.light_days[i], 1)) + str(' Light Travel Days'))   
-                ax1.grid(False)
-                ax1.set_xlabel('pixel')
+                            s=30, color='orange', ec='black', zorder=3)
+                ax1.scatter(self.boxwidth/2, self.ys/2 - self.upper_bound_east[str(self.light_days[i])]*ri, marker='<',
+                            s=35, color='mediumturquoise', ec='black', zorder=3, label='Data Edge')
+                ax1.scatter(self.boxwidth/2, self.ys/2 - self.lower_bound_east[str(self.light_days[i])]*ri, marker='<',
+                            s=35, color='mediumturquoise', ec='black', zorder=3)
+                ax1.set_ylabel('Slice at ' + str(-np.round(self.light_days[i], 1)) + str(' Light Travel Days'))   
+                ax1.tick_params(axis="both", which="both", bottom=False, top=False, left=False, right=False, labelbottom=False, labelleft=False)
                 ax1.legend(bbox_to_anchor=(3.5, 1), fontsize=6)
             # Slice Data 2D
                 ax2 = fig.add_subplot(122) # row col pos
-                ax2.plot(Data.full_slice, Data.full_h_r, color='black', ls='--', label='Full Slice')
-                ax2.plot(Data.slice, Data.h_r, color='magenta', marker = '.', ls='--', label='Truncated Shadow')
-                ax2.scatter(Data.full_slice[Data.bounds_slice[1]], Data.bounds[1], marker='v', lw=2, color = 'orange', zorder=3)
-                ax2.scatter(Data.full_slice[Data.bounds_slice[0]], Data.bounds[0], marker='^', lw=2, color = 'orange', zorder=3)
+                ax2.plot(Data.full_slice, Data.full_h_r, color='black', ls='--', lw=1, label='Full Slice')
+                ax2.plot(Data.slice, Data.h_r, color='mediumturquoise', marker = '.', label='Truncated Shadow')
+                ax2.scatter(Data.full_slice[Data.bounds_slice[1]], Data.bounds[1], marker='v',
+                            s=28, color = 'orange', ec='black', zorder=3)
+                ax2.scatter(Data.full_slice[Data.bounds_slice[0]], Data.bounds[0], marker='^',
+                            s=28, color = 'orange', ec='black', zorder=3)
                 ax2.set_title('Slice Data')
                 ax2.set_ylabel('Scale Height H/R')
                 ax2.set_xlabel('Intensity')
-                ax2.legend()
+                ax2.legend(loc='upper right', fontsize=9)
                 fig.savefig(self.save_path + '/slice_selections/slice_' + str(-int(self.light_days[i])) + '.pdf', bbox_inches='tight')
                 
     def MCMCRunner(self, upper_h_r = 0.3, lower_h_r = -0.5, save_chainplot=False):
